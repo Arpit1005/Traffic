@@ -123,7 +123,7 @@ void add_vehicle_to_lane(LaneProcess* lane, int vehicle_id) {
     pthread_mutex_unlock(&lane->queue_lock);
 }
 
-// Remove vehicle from lane queue
+// Remove vehicle from lane queue (with locking)
 int remove_vehicle_from_lane(LaneProcess* lane) {
     if (!lane || !lane->queue) {
         return -1;
@@ -135,6 +135,20 @@ int remove_vehicle_from_lane(LaneProcess* lane) {
     lane->queue_length = get_size(lane->queue);
 
     pthread_mutex_unlock(&lane->queue_lock);
+
+    return vehicle_id;
+}
+
+// --- NEW FUNCTION: Remove vehicle WITHOUT locking ---
+// For use when you already hold the lane->queue_lock
+int remove_vehicle_from_lane_unlocked(LaneProcess* lane) {
+    if (!lane || !lane->queue) {
+        return -1;
+    }
+
+    // NOTE: Caller must hold lane->queue_lock
+    int vehicle_id = dequeue(lane->queue);
+    lane->queue_length = get_size(lane->queue);
 
     return vehicle_id;
 }

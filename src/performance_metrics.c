@@ -73,14 +73,19 @@ void calculate_wait_time_metrics(PerformanceMetrics* metrics, float lane_wait_ti
     float total_wait = 0.0f;
     int active_lanes = 0;
 
+    // --- FIX: Calculate average wait time across all lanes ---
+    // Use both accumulated wait times and per-lane throughput for proper averaging
     for (int i = 0; i < 4; i++) {
         metrics->lane_wait_times[i] = lane_wait_times[i];
-        if (lane_wait_times[i] > 0) {
-            total_wait += lane_wait_times[i];
+        if (metrics->lane_throughput[i] > 0) {
+            // Average = total_wait_time_for_lane / vehicles_processed_in_lane
+            float lane_avg = lane_wait_times[i] / metrics->lane_throughput[i];
+            total_wait += lane_avg;
             active_lanes++;
         }
     }
 
+    // Average wait time across all active lanes
     metrics->avg_wait_time = active_lanes > 0 ? (total_wait / active_lanes) : 0.0f;
 }
 
@@ -207,6 +212,26 @@ void update_time_based_metrics(PerformanceMetrics* metrics, time_t current_time)
 
     metrics->total_simulation_time = (int)(current_time - metrics->measurement_start_time);
     calculate_throughput_metrics(metrics, current_time);
+    
+    // --- FIX: Calculate wait time metrics from lane wait times ---
+    calculate_wait_time_metrics(metrics, metrics->lane_wait_times);
+    
+    // --- FIX: Calculate fairness index metrics ---
+    calculate_fairness_index_metrics(metrics, metrics->lane_wait_times);
+    
+    // --- NEW: Calculate utilization metrics ---
+    // Utilization = vehicles processed / (total_time * expected_arrivals_per_second)
+    if (metrics->total_simulation_time > 0) {
+        // Expected arrivals per second (based on arrival rate between 1-3 sec)
+        float expected_arrivals_per_sec = 1.0f / 2.0f;  // Average of 1-3 seconds
+        float expected_vehicles = expected_arrivals_per_sec * metrics->total_simulation_time;
+        if (expected_vehicles > 0) {
+            metrics->utilization = (float)metrics->total_vehicles_processed / expected_vehicles;
+            if (metrics->utilization > 1.0f) metrics->utilization = 1.0f;
+        }
+    }
+    // --- END NEW ---
+    
     metrics->last_update_time = current_time;
 }
 

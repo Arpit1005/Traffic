@@ -25,10 +25,10 @@
 #define NUM_LANES 4
 #define MAX_QUEUE_CAPACITY 20
 #define DEFAULT_TIME_QUANTUM 3
-#define CONTEXT_SWITCH_TIME 100  // milliseconds
-#define VEHICLE_CROSS_TIME 2     // seconds
+#define CONTEXT_SWITCH_TIME 500  // milliseconds
+#define VEHICLE_CROSS_TIME 3     // seconds (increased from 2 - each vehicle takes longer)
 #define EMERGENCY_PROBABILITY 100 // 1 in 100 chance per check
-#define SIMULATION_UPDATE_INTERVAL 100000 // microseconds (100ms)
+#define SIMULATION_UPDATE_INTERVAL 300000 // microseconds (300ms for faster display updates)
 
 // Lane definitions
 #define LANE_NORTH 0
@@ -37,8 +37,8 @@
 #define LANE_WEST 3
 
 // Traffic simulation parameters
-#define VEHICLE_ARRIVAL_RATE_MIN 1   // seconds
-#define VEHICLE_ARRIVAL_RATE_MAX 5   // seconds
+#define VEHICLE_ARRIVAL_RATE_MIN 1   // seconds (restored - keep fast)
+#define VEHICLE_ARRIVAL_RATE_MAX 3   // seconds (restored - keep fast)
 #define SIMULATION_DURATION 300      // seconds (5 minutes default)
 
 // --- DELETED ---

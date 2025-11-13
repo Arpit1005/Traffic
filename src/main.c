@@ -451,7 +451,7 @@ void pause_traffic_simulation() {
 
 // Resume traffic simulation
 void resume_traffic_simulation() {
-    if (!g_TraficGuruSystem) { // <-- TYPO WAS HERE
+    if (!g_traffic_system) { // <-- FIXED TYPO ---
         return;
     }
 

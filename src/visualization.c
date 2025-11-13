@@ -374,22 +374,36 @@ static void draw_lanes_window(LaneProcess lanes[4]) {
 
     // --- Draw Status Block (Right Side) ---
     int status_x_pos = 35;
-    mvwprintw(lanes_win, 2, status_x_pos, "LANE   | STATE   | QUEUE | WAIT");
-    mvwprintw(lanes_win, 3, status_x_pos, "-------+---------+-------+------");
+    mvwprintw(lanes_win, 2, status_x_pos, "LANE   | STATUS   | QUEUE | WAIT");
+    mvwprintw(lanes_win, 3, status_x_pos, "-------+----------+-------+------");
 
     for (int i = 0; i < 4; i++) {
         // Set color based on state
         int color_pair = 5; // Default white
-        if (states[i] == RUNNING) color_pair = 2; // Green
-        else if (states[i] == READY) color_pair = 3; // Yellow
-        else if (states[i] == WAITING) color_pair = 1; // Red
+        char state_indicator[20];
+        
+        if (states[i] == RUNNING) {
+            color_pair = 2; // Green
+            snprintf(state_indicator, 20, ">> RUN <<");  // --- NEW: Visual indicator ---
+        }
+        else if (states[i] == READY) {
+            color_pair = 3; // Yellow
+            snprintf(state_indicator, 20, "  OPEN");    // --- NEW: Visual indicator ---
+        }
+        else if (states[i] == WAITING) {
+            color_pair = 1; // Red
+            snprintf(state_indicator, 20, "  WAIT");    // --- NEW: Visual indicator ---
+        }
+        else {
+            snprintf(state_indicator, 20, " BLOCK");
+        }
         
         wattron(lanes_win, COLOR_PAIR(color_pair));
         
-        // Draw the formatted status line
-        mvwprintw(lanes_win, 4 + i, status_x_pos, "%-6s | %-7s | %-5d | %ds", 
+        // Draw the formatted status line with better visual indicators
+        mvwprintw(lanes_win, 4 + i, status_x_pos, "%-6s | %-8s | %-5d | %ds", 
                   lane_names[i], 
-                  state_names[states[i]], 
+                  state_indicator,        // --- NEW: Use indicator instead of state name ---
                   queues[i], 
                   waits[i]);
         
@@ -403,6 +417,23 @@ static void draw_lanes_window(LaneProcess lanes[4]) {
         mvwprintw(lanes_win, 13, 4, "*** EMERGENCY ACTIVE ***");
         wattroff(lanes_win, A_BLINK | COLOR_PAIR(1));
     }
+    
+    // --- NEW: Add legend for lane states ---
+    mvwprintw(lanes_win, 10, 2, "Legend:");
+    wattron(lanes_win, COLOR_PAIR(2));
+    mvwprintw(lanes_win, 11, 2, ">> RUN <<");
+    wattroff(lanes_win, COLOR_PAIR(2));
+    mvwprintw(lanes_win, 11, 12, " = Vehicle Processing (Green)");
+    
+    wattron(lanes_win, COLOR_PAIR(3));
+    mvwprintw(lanes_win, 12, 2, "  OPEN");
+    wattroff(lanes_win, COLOR_PAIR(3));
+    mvwprintw(lanes_win, 12, 12, " = Ready for Processing (Yellow)");
+    
+    wattron(lanes_win, COLOR_PAIR(1));
+    mvwprintw(lanes_win, 13, 2, "  WAIT");
+    wattroff(lanes_win, COLOR_PAIR(1));
+    mvwprintw(lanes_win, 13, 12, " = Waiting for Green Light (Red)");
 }
 
 // --- FIX: Renamed function ---

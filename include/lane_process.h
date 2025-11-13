@@ -42,6 +42,7 @@ void* lane_process_thread(void* arg);
 // Queue management functions
 void add_vehicle_to_lane(LaneProcess* lane, int vehicle_id);
 int remove_vehicle_from_lane(LaneProcess* lane);
+int remove_vehicle_from_lane_unlocked(LaneProcess* lane);  // --- NEW: Without locking ---
 int get_lane_queue_length(LaneProcess* lane);
 
 // State management functions

@@ -173,8 +173,8 @@ void execute_lane_time_slice(Scheduler* scheduler, LaneProcess* lane, int time_q
     pthread_mutex_lock(&g_traffic_system->global_state_lock);
     pthread_mutex_lock(&lane->queue_lock);
     
-    // 1. Get vehicle ID from queue. 
-    vehicle_id = remove_vehicle_from_lane(lane); // This should NOT lock
+    // 1. Get vehicle ID from queue (using unlocked version since we hold the lock)
+    vehicle_id = remove_vehicle_from_lane_unlocked(lane);
     
     if (vehicle_id != -1) { // Assuming -1 means empty queue
         // We successfully processed one vehicle
@@ -191,6 +191,18 @@ void execute_lane_time_slice(Scheduler* scheduler, LaneProcess* lane, int time_q
         g_traffic_system->metrics.total_vehicles_processed++;
         g_traffic_system->metrics.lane_throughput[lane->lane_id]++;
         g_traffic_system->metrics.lane_wait_times[lane->lane_id] += (float)wait_time_sec; 
+        
+        // --- NEW: Add processing delay to make vehicle allocation visible ---
+        // Unlock before sleeping to allow other threads to run
+        pthread_mutex_unlock(&lane->queue_lock);
+        pthread_mutex_unlock(&g_traffic_system->global_state_lock);
+        
+        // Sleep to simulate vehicle crossing the intersection (2-4 seconds)
+        usleep(2000000 + (rand() % 2000000));  // 2-4 seconds
+        
+        // Re-acquire locks for cleanup
+        pthread_mutex_lock(&g_traffic_system->global_state_lock);
+        pthread_mutex_lock(&lane->queue_lock);
     }
     // --- END FIX ---
 
@@ -226,13 +238,15 @@ void context_switch(Scheduler* scheduler, LaneProcess* from_lane, LaneProcess* t
         // Lock before changing state
         pthread_mutex_lock(&from_lane->queue_lock);
         if (from_lane->state == RUNNING) {
-            // --- FIX: Use correct function ---
+            // --- FIX: Change state directly without calling update_lane_state ---
+            // (update_lane_state tries to lock again, causing deadlock)
             // If queue is empty, context switch will set to WAITING
             if (from_lane->queue_length > 0) {
-                 update_lane_state(from_lane, READY);
+                from_lane->state = READY;
             } else {
-                 update_lane_state(from_lane, WAITING);
+                from_lane->state = WAITING;
             }
+            pthread_cond_signal(&from_lane->queue_cond);
         }
         pthread_mutex_unlock(&from_lane->queue_lock);
     }
@@ -242,16 +256,19 @@ void context_switch(Scheduler* scheduler, LaneProcess* from_lane, LaneProcess* t
         // Lock before changing state
         pthread_mutex_lock(&to_lane->queue_lock);
         if (to_lane->state == READY) {
-            // --- FIX: Use correct function ---
-            update_lane_state(to_lane, RUNNING);
+            // --- FIX: Change state directly without calling update_lane_state ---
+            // (update_lane_state tries to lock again, causing deadlock)
+            to_lane->state = RUNNING;
+            to_lane->waiting_time = 0;  // Reset wait time when entering RUNNING
+            pthread_cond_signal(&to_lane->queue_cond);
         }
         pthread_mutex_unlock(&to_lane->queue_lock);
     }
-
     // scheduler->total_context_switches++; // Moved to schedule_next_lane
 
-    // Simulate context switch overhead
+    // Simulate context switch overhead (increased delay for visibility)
     usleep(scheduler->context_switch_time * 1000);
+    usleep(1000000);  // Additional 1 second delay to show lane transitions clearly
 }
 
 // Set scheduling algorithm
