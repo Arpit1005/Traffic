@@ -194,12 +194,16 @@ void execute_lane_time_slice(Scheduler* scheduler, LaneProcess* lane, int time_q
         
         // 2. Calculate wait time
         time_t now = time(NULL);
-        wait_time_sec = (int)(now - lane->last_arrival_time); 
         if (wait_time_sec < 0) wait_time_sec = 0; // Sanity check
-
         // 3. --- FIX: UPDATE RAW METRICS ---
-        // This is the fix for "metrics are 0".
-        // We are holding the global_state_lock, so this is safe.
+        // Calculate wait time: use queue waiting time if available, else estimate from last arrival
+        if (lane->waiting_time > 0) {
+            wait_time_sec = lane->waiting_time;  // Use accumulated waiting time
+        } else if (lane->last_arrival_time > 0) {
+            wait_time_sec = (int)(now - lane->last_arrival_time);  // Estimate from last arrival
+        } else {
+            wait_time_sec = lane->queue_length * 2;  // Rough estimate: 2 sec per vehicle in queue
+        }        // We are holding the global_state_lock, so this is safe.
         g_traffic_system->metrics.total_vehicles_processed++;
         g_traffic_system->metrics.lane_throughput[lane->lane_id]++;
         g_traffic_system->metrics.lane_wait_times[lane->lane_id] += (float)wait_time_sec; 
