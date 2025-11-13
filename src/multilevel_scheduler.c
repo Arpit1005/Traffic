@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <pthread.h>
 
 // Priority levels for multilevel feedback queue
 typedef enum {
@@ -26,12 +27,12 @@ typedef struct {
 // Global priority tracking for lanes
 static LanePriorityInfo lane_priorities[4];
 static bool priorities_initialized = false;
+static pthread_mutex_t priority_lock = PTHREAD_MUTEX_INITIALIZER;  // Thread safety for priority updates
 
 // Priority thresholds
 #define PROMOTION_THRESHOLD 10    // Waiting time in seconds for promotion
-#define DEMOTION_THRESHOLD 3      // Consecutive runs for demotion
-#define AGING_THRESHOLD 15        // Maximum wait time before forced promotion
-
+#define DEMOTION_THRESHOLD 5       // Consecutive runs for demotion (increased for better traffic flow
+#define AGING_THRESHOLD 15       // Maximum wait time before forced promotion
 // Time quantum per priority level
 static const int time_quanta[NUM_PRIORITY_LEVELS] = {2, 4, 6}; // seconds
 
@@ -57,9 +58,10 @@ void init_lane_priorities() {
 
 // Update lane priorities based on behavior
 void update_lane_priority(LaneProcess* lane) {
+        pthread_mutex_lock(&priority_lock);  // Protect priority updates
     if (!lane || !priorities_initialized) {
-        return;
-    }
+        pthread_mutex_unlock(&priority_lock);
+            return;}
 
     LanePriorityInfo* priority_info = &lane_priorities[lane->lane_id];
     time_t current_time = time(NULL);
@@ -69,7 +71,7 @@ void update_lane_priority(LaneProcess* lane) {
 
     // Check for promotion (lane has waited too long)
     if (lane->waiting_time > PROMOTION_THRESHOLD &&
-        priority_info->current_priority < PRIORITY_HIGH) {
+        priority_info->current_priority > PRIORITY_HIGH) {
 
         priority_info->current_priority--;
         priority_info->last_promotion = current_time;
@@ -104,6 +106,7 @@ void update_lane_priority(LaneProcess* lane) {
         // Reset consecutive runs when lane is not running
         priority_info->consecutive_runs = 0;
     }
+    pthread_mutex_unlock(&priority_lock);  // Release lock before returning
 }
 
 // Multilevel Feedback Queue scheduling algorithm
