@@ -41,6 +41,12 @@
 #define VEHICLE_ARRIVAL_RATE_MAX 5   // seconds
 #define SIMULATION_DURATION 300      // seconds (5 minutes default)
 
+// --- DELETED ---
+// The VisualizationSnapshot struct is removed to prevent deadlocks.
+// The UI will use pthread_mutex_trylock() instead.
+// --- END DELETED ---
+
+
 // Global system state
 typedef struct {
     LaneProcess lanes[NUM_LANES];           // All traffic lanes
@@ -58,10 +64,28 @@ typedef struct {
     int total_vehicles_generated;           // Total vehicles in simulation
     pthread_t simulation_thread;            // Main simulation thread
     pthread_mutex_t global_state_lock;      // Global state protection
+    
+    // --- NEW FIELDS TO FIX "VALUES ARE 0" BUG ---
+    int min_arrival_rate;                   // Min vehicle arrival rate (sec)
+    int max_arrival_rate;                   // Max vehicle arrival rate (sec)
+    pthread_t vehicle_generator_thread;     // Thread for generating vehicles
+    // --- END NEW FIELDS ---
+    
+    // --- DELETED ---
+    // Removed snapshot fields
+    // --- END DELETED ---
+
 } TrafficGuruSystem;
 
 // Global system instance
 extern TrafficGuruSystem* g_traffic_system;
+
+// --- MODIFICATION ---
+// Global flag to stop the main loop from any file
+// 'extern' tells other files this variable exists
+// 'volatile' ensures it's safe to use across threads/signals
+extern volatile bool keep_running;
+// --- END MODIFICATION ---
 
 // System lifecycle functions
 int init_traffic_guru_system();
@@ -75,6 +99,10 @@ void resume_traffic_simulation();
 void* simulation_main_loop(void* arg);
 void update_simulation_state();
 void process_traffic_events();
+
+// --- DELETED ---
+// Removed update_visualization_snapshot prototype
+// --- END DELETED ---
 
 // Signal handlers
 void handle_signal_interrupt(int sig);

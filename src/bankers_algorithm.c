@@ -8,6 +8,14 @@
 static BankersState g_bankers_state = {0};
 static bool bankers_initialized = false;
 
+// --- DEADLOCK FIX ---
+// Create internal, non-locking versions of the safety algorithms.
+// These are to be called ONLY by functions that already hold the lock.
+static bool is_safe_state_unlocked(BankersState* state);
+static bool safety_algorithm_unlocked(BankersState* state, bool finish[NUM_LANES]);
+// --- END DEADLOCK FIX ---
+
+
 // Initialize Banker's algorithm state
 void init_bankers_state(BankersState* state) {
     if (!state) {
@@ -94,7 +102,9 @@ bool request_resources(BankersState* state, int lane_id, int request[NUM_QUADRAN
     }
 
     // Step 4: Check if system remains in safe state
-    if (is_safe_state(state)) {
+    // --- DEADLOCK FIX: Call the internal _unlocked version ---
+    if (is_safe_state_unlocked(state)) {
+    // --- END DEADLOCK FIX ---
         // Allocation is safe, proceed
         printf("Safe allocation for lane %d\n", lane_id);
         pthread_mutex_unlock(&state->resource_lock);
@@ -115,8 +125,10 @@ bool request_resources(BankersState* state, int lane_id, int request[NUM_QUADRAN
     }
 }
 
-// Safety algorithm implementation
-bool is_safe_state(BankersState* state) {
+// --- DEADLOCK FIX: Renamed to is_safe_state_unlocked and made static ---
+// Safety algorithm implementation (INTERNAL, NO LOCK)
+static bool is_safe_state_unlocked(BankersState* state) {
+// --- END DEADLOCK FIX ---
     if (!state) {
         return false;
     }
@@ -178,8 +190,25 @@ bool is_safe_state(BankersState* state) {
     return all_finished;
 }
 
-// Detailed safety algorithm
-bool safety_algorithm(BankersState* state, bool finish[NUM_LANES]) {
+// --- DEADLOCK FIX: NEW public, thread-safe version ---
+// This is the function external modules should call.
+bool is_safe_state(BankersState* state) {
+    if (!state) {
+        return false;
+    }
+    pthread_mutex_lock(&state->resource_lock);
+    // Call the internal, non-locking function
+    bool safe = is_safe_state_unlocked(state);
+    pthread_mutex_unlock(&state->resource_lock);
+    return safe;
+}
+// --- END DEADLOCK FIX ---
+
+
+// --- DEADLOCK FIX: Renamed to safety_algorithm_unlocked and made static ---
+// Detailed safety algorithm (INTERNAL, NO LOCK)
+static bool safety_algorithm_unlocked(BankersState* state, bool finish[NUM_LANES]) {
+// --- END DEADLOCK FIX ---
     if (!state || !finish) {
         return false;
     }
@@ -232,6 +261,20 @@ bool safety_algorithm(BankersState* state, bool finish[NUM_LANES]) {
 
     return true; // Safe sequence found
 }
+
+// --- DEADLOCK FIX: NEW public, thread-safe version ---
+bool safety_algorithm(BankersState* state, bool finish[NUM_LANES]) {
+    if (!state || !finish) {
+        return false;
+    }
+    pthread_mutex_lock(&state->resource_lock);
+    // Call the internal, non-locking function
+    bool safe = safety_algorithm_unlocked(state, finish);
+    pthread_mutex_unlock(&state->resource_lock);
+    return safe;
+}
+// --- END DEADLOCK FIX ---
+
 
 // Allocate resources to a lane
 void allocate_resources(BankersState* state, int lane_id, int allocation[NUM_QUADRANTS]) {
@@ -391,6 +434,7 @@ bool check_resource_request(BankersState* state, int lane_id, int request[NUM_QU
 
 // Check if deadlock is possible
 bool is_deadlock_possible(BankersState* state) {
+    // This function now correctly calls the thread-safe version
     return !is_safe_state(state);
 }
 

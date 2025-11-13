@@ -245,14 +245,6 @@ void set_emergency_priority(LaneProcess* lane, int priority) {
     lane->priority = priority;
 }
 
-// Restore lane priority
-void restore_lane_priority(LaneProcess* lane, int original_priority) {
-    if (!lane) {
-        return;
-    }
-
-    lane->priority = original_priority;
-}
 
 // Calculate emergency priority based on type
 int calculate_emergency_priority(EmergencyType type) {

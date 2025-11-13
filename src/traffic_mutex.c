@@ -283,6 +283,11 @@ bool acquire_intersection_with_preemption(LaneProcess* lane) {
         intersection->current_lane != lane->lane_id) {
 
         LaneProcess* current_lane = NULL; // This would need access to the global lanes array
+        
+        // --- FIX: Suppress unused variable warning ---
+        (void)current_lane; 
+        // --- END FIX ---
+        
         // For now, assume we can check priority
 
         if (lane->priority < 2) { // High priority lane

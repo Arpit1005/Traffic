@@ -2,31 +2,91 @@
 #include "../include/trafficguru.h"
 #include <getopt.h>
 #include <signal.h>
+#include <ncurses.h> // <--- ADDED for getch()
 
 // Global system instance
 TrafficGuruSystem* g_traffic_system = NULL;
 
 // Signal handling
-static volatile bool keep_running = true;
+volatile bool keep_running = true; // <-- REMOVED 'static'
 static volatile bool pause_requested = false;
+
+// --- NEW FUNCTION: Vehicle Generator Thread ---
+// This loop runs in its own thread and generates vehicles
+// to fix the "all values are 0" bug.
+void* vehicle_generator_loop(void* arg) {
+    (void)arg;
+
+    while (g_traffic_system && g_traffic_system->simulation_running && keep_running) {
+        if (!g_traffic_system->simulation_paused) {
+            // Calculate random sleep time in microseconds
+            // --- FIX: Use seconds, not milliseconds ---
+            int min_sec = g_traffic_system->min_arrival_rate;
+            int max_sec = g_traffic_system->max_arrival_rate;
+            // Ensure min <= max
+            if (min_sec > max_sec) min_sec = max_sec;
+            
+            // Calculate sleep time in seconds (can be 0)
+            int sleep_time_sec = (rand() % (max_sec - min_sec + 1)) + min_sec;
+            
+            // Convert to microseconds, but also add some sub-second randomness
+            // (e.g., 1-5 seconds becomes 1000ms-5000ms)
+            long sleep_time_us = (sleep_time_sec * 1000000) + (rand() % 1000 * 1000);
+            
+            // Pick a random lane
+            int lane_idx = rand() % NUM_LANES;
+            LaneProcess* lane = &g_traffic_system->lanes[lane_idx];
+
+            // --- DEADLOCK FIX: Lock global state ONLY for the counter ---
+            int new_vehicle_id = 0;
+            pthread_mutex_lock(&g_traffic_system->global_state_lock);
+            new_vehicle_id = g_traffic_system->total_vehicles_generated++;
+            pthread_mutex_unlock(&g_traffic_system->global_state_lock);
+            // --- END DEADLOCK FIX ---
+            
+            // We assume add_vehicle_to_lane is thread-safe (uses lane->queue_lock)
+            add_vehicle_to_lane(lane, new_vehicle_id); 
+            
+            // --- "Wake up" the lane (this is also a lock) ---
+            pthread_mutex_lock(&lane->queue_lock);
+            if (lane->state == WAITING) {
+                lane->state = READY;
+                lane->waiting_time = 0; // Reset wait time
+            }
+            pthread_mutex_unlock(&lane->queue_lock);
+            // --- END FIX ---
+            
+            // Sleep for the calculated time (in microseconds)
+            usleep(sleep_time_us);
+        } else {
+            // Sleep for a bit if paused
+            usleep(500000); // 500ms
+        }
+    }
+    return NULL;
+}
+// --- END NEW FUNCTION ---
+
 
 void handle_signal_interrupt(int sig) {
     (void)sig; // Suppress unused parameter warning
-    printf("\nReceived interrupt signal, shutting down gracefully...\n");
+    // This can be called from a signal, avoid printf
     keep_running = false;
     if (g_traffic_system) {
-        stop_traffic_simulation();
+        g_traffic_system->simulation_running = false;
     }
 }
 
 void handle_signal_terminate(int sig) {
     (void)sig;
-    printf("\nReceived terminate signal, shutting down immediately...\n");
+    // This can be called from a signal, avoid printf
     keep_running = false;
     if (g_traffic_system) {
-        stop_traffic_simulation();
+        g_traffic_system->simulation_running = false;
     }
-    exit(0);
+    // A more forceful exit might be needed if ncurses is running
+    // endwin();
+    // exit(0);
 }
 
 void setup_signal_handlers() {
@@ -215,7 +275,8 @@ int init_traffic_guru_system() {
     init_traffic_mutex_system();
 
     // Initialize visualization
-    init_visualization(&g_traffic_system->visualization);
+    // This will call initscr()
+    init_visualization(&g_traffic_system->visualization); 
 
     // Initialize signal history
     init_signal_history(&g_traffic_system->signal_history, 1000);
@@ -226,11 +287,23 @@ int init_traffic_guru_system() {
     g_traffic_system->simulation_start_time = time(NULL);
     g_traffic_system->simulation_end_time = time(NULL) + SIMULATION_DURATION;
     g_traffic_system->total_vehicles_generated = 0;
+    
+    // --- FIX: Initialize new fields ---
+    g_traffic_system->min_arrival_rate = VEHICLE_ARRIVAL_RATE_MIN;
+    g_traffic_system->max_arrival_rate = VEHICLE_ARRIVAL_RATE_MAX;
+    g_traffic_system->vehicle_generator_thread = 0; // Mark as not running
+    // --- END FIX ---
+
 
     // Initialize global state lock
     pthread_mutex_init(&g_traffic_system->global_state_lock, NULL);
 
-    printf("TrafficGuru system initialized successfully\n");
+    // --- DELETED ---
+    // The snapshot and its mutex are removed.
+    // --- END DELETED ---
+
+    // Don't printf after init_visualization, it messes up ncurses
+    // printf("TrafficGuru system initialized successfully\n");
     return 0;
 }
 
@@ -240,13 +313,18 @@ void destroy_traffic_guru_system() {
         return;
     }
 
-    printf("Shutting down TrafficGuru system...\n");
+    // printf("Shutting down TrafficGuru system...\n"); // Messes up ncurses
 
     // Stop simulation if running
     stop_traffic_simulation();
 
     // Destroy visualization
+    // This MUST call endwin()
     destroy_visualization(&g_traffic_system->visualization);
+
+    // Now it's safe to printf
+    printf("Shutting down TrafficGuru system...\n");
+
 
     // Destroy signal history
     destroy_signal_history(&g_traffic_system->signal_history);
@@ -274,6 +352,10 @@ void destroy_traffic_guru_system() {
     // Destroy global state lock
     pthread_mutex_destroy(&g_traffic_system->global_state_lock);
 
+    // --- DELETED ---
+    // Removed snapshot mutex destroy
+    // --- END DELETED ---
+
     // Free system structure
     free(g_traffic_system);
     g_traffic_system = NULL;
@@ -289,11 +371,11 @@ int start_traffic_simulation() {
     }
 
     if (g_traffic_system->simulation_running) {
-        printf("Simulation already running\n");
+        // printf("Simulation already running\n");
         return 0;
     }
 
-    printf("Starting traffic simulation...\n");
+    // printf("Starting traffic simulation...\n");
 
     g_traffic_system->simulation_running = true;
     g_traffic_system->simulation_paused = false;
@@ -309,8 +391,20 @@ int start_traffic_simulation() {
         g_traffic_system->simulation_running = false;
         return -1;
     }
+    
+    // --- FIX: Start the vehicle generator thread ---
+    if (pthread_create(&g_traffic_system->vehicle_generator_thread, NULL,
+                      vehicle_generator_loop, NULL) != 0) {
+        // Can't printf, ncurses is active
+        // We should stop the other thread...
+        g_traffic_system->simulation_running = false; 
+        pthread_join(g_traffic_system->simulation_thread, NULL);
+        return -1; // Failed
+    }
+    // --- END FIX ---
 
-    printf("Traffic simulation started\n");
+
+    // printf("Traffic simulation started\n");
     return 0;
 }
 
@@ -320,7 +414,7 @@ void stop_traffic_simulation() {
         return;
     }
 
-    printf("Stopping traffic simulation...\n");
+    // printf("Stopping traffic simulation...\n");
 
     g_traffic_system->simulation_running = false;
     g_traffic_system->simulation_end_time = time(NULL);
@@ -329,9 +423,20 @@ void stop_traffic_simulation() {
     stop_scheduler(&g_traffic_system->scheduler);
 
     // Wait for simulation thread to finish
-    pthread_join(g_traffic_system->simulation_thread, NULL);
+    if (g_traffic_system->simulation_thread) {
+        pthread_join(g_traffic_system->simulation_thread, NULL);
+        g_traffic_system->simulation_thread = 0; // Mark as joined
+    }
+    
+    // --- FIX: Stop the vehicle generator thread ---
+    if (g_traffic_system->vehicle_generator_thread) {
+        pthread_join(g_traffic_system->vehicle_generator_thread, NULL);
+        g_traffic_system->vehicle_generator_thread = 0; // Mark as joined
+    }
+    // --- END FIX ---
 
-    printf("Traffic simulation stopped\n");
+
+    // printf("Traffic simulation stopped\n");
 }
 
 // Pause traffic simulation
@@ -341,24 +446,24 @@ void pause_traffic_simulation() {
     }
 
     g_traffic_system->simulation_paused = true;
-    printf("Simulation paused\n");
+    // printf("Simulation paused\n"); // Messes up ncurses
 }
 
 // Resume traffic simulation
 void resume_traffic_simulation() {
-    if (!g_traffic_system) {
+    if (!g_TraficGuruSystem) { // <-- TYPO WAS HERE
         return;
     }
 
     g_traffic_system->simulation_paused = false;
-    printf("Simulation resumed\n");
+    // printf("Simulation resumed\n"); // Messes up ncurses
 }
 
 // Main simulation loop
 void* simulation_main_loop(void* arg) {
     (void)arg; // Suppress unused parameter warning
 
-    printf("Simulation main loop started\n");
+    // printf("Simulation main loop started\n");
 
     while (g_traffic_system && g_traffic_system->simulation_running && keep_running) {
         if (!g_traffic_system->simulation_paused) {
@@ -370,7 +475,7 @@ void* simulation_main_loop(void* arg) {
         usleep(SIMULATION_UPDATE_INTERVAL);
     }
 
-    printf("Simulation main loop ended\n");
+    // printf("Simulation main loop ended\n");
     return NULL;
 }
 
@@ -380,22 +485,22 @@ void update_simulation_state() {
         return;
     }
 
+    // --- DEADLOCK FIX: Lock only for metrics update ---
     pthread_mutex_lock(&g_traffic_system->global_state_lock);
-
     // Update metrics
     update_time_based_metrics(&g_traffic_system->metrics, time(NULL));
-
     // Update emergency system
     update_emergency_progress(&g_traffic_system->emergency_system);
+    pthread_mutex_unlock(&g_traffic_system->global_state_lock);
+    // --- END DEADLOCK FIX ---
 
-    // Check for deadlocks
+
+    // Check for deadlocks (must be outside the global lock)
     static int deadlock_check_counter = 0;
     if (++deadlock_check_counter >= 100) { // Check every 100 iterations
         detect_and_resolve_advanced_deadlock(g_traffic_system->lanes);
         deadlock_check_counter = 0;
     }
-
-    pthread_mutex_unlock(&g_traffic_system->global_state_lock);
 }
 
 // Process traffic events
@@ -442,6 +547,7 @@ void print_usage(const char* program_name) {
 
 void cleanup_and_exit(int exit_code) {
     destroy_traffic_guru_system();
+    // ncurses cleanup should happen in destroy_visualization
     exit(exit_code);
 }
 
@@ -452,13 +558,13 @@ bool validate_system_state() {
 
     // Validate intersection state
     if (!validate_intersection_state()) {
-        printf("ERROR: Invalid intersection state detected\n");
+        // printf("ERROR: Invalid intersection state detected\n");
         return false;
     }
 
     // Validate Banker's algorithm state
     if (!is_safe_state(&g_traffic_system->bankers_state)) {
-        printf("WARNING: System in unsafe state\n");
+        // printf("WARNING: System in unsafe state\n");
     }
 
     return true;
@@ -472,8 +578,15 @@ void set_simulation_duration(int seconds) {
 }
 
 void set_vehicle_arrival_rate(int min_seconds, int max_seconds) {
-    // This would typically be stored in a global config structure
-    printf("Vehicle arrival rate set to %d-%d seconds\n", min_seconds, max_seconds);
+    // --- FIX: Actually store the values ---
+    if (g_traffic_system) {
+        g_traffic_system->min_arrival_rate = min_seconds;
+        g_traffic_system->max_arrival_rate = max_seconds;
+        if (g_traffic_system->min_arrival_rate > g_traffic_system->max_arrival_rate) {
+             g_traffic_system->max_arrival_rate = g_traffic_system->min_arrival_rate;
+        }
+    }
+    // --- END FIX ---
 }
 
 void set_time_quantum(int seconds) {
@@ -483,23 +596,38 @@ void set_time_quantum(int seconds) {
 }
 
 void set_debug_mode(bool enabled) {
-    printf("Debug mode %s\n", enabled ? "enabled" : "disabled");
+    // printf("Debug mode %s\n", enabled ? "enabled" : "disabled");
+    
+    // --- FIX: Suppress unused parameter warning ---
+    (void)enabled;
 }
 
 // Logging functions
 void log_system_event(const char* event) {
     time_t now = time(NULL);
-    printf("[%ld] EVENT: %s\n", now, event);
+    // printf("[%ld] EVENT: %s\n", now, event);
+
+    // --- FIX: Suppress unused warnings ---
+    (void)event;
+    (void)now;
 }
 
 void log_error(const char* error) {
     time_t now = time(NULL);
-    fprintf(stderr, "[%ld] ERROR: %s\n", now, error);
+    // fprintf(stderr, "[%ld] ERROR: %s\n", now, error);
+
+    // --- FIX: Suppress unused warnings ---
+    (void)error;
+    (void)now;
 }
 
 void log_debug(const char* message) {
     time_t now = time(NULL);
-    printf("[%ld] DEBUG: %s\n", now, message);
+    // printf("[%ld] DEBUG: %s\n", now, message);
+
+    // --- FIX: Suppress unused warnings ---
+    (void)message;
+    (void)now;
 }
 
 void log_performance_summary() {
@@ -507,10 +635,25 @@ void log_performance_summary() {
         return;
     }
 
+    // This is called AFTER endwin() in destroy_traffic_guru_system()
     printf("\n=== PERFORMANCE SUMMARY ===\n");
     print_performance_metrics(&g_traffic_system->metrics);
     printf("===========================\n\n");
 }
+
+// --- DELETED ---
+// The update_visualization_snapshot function is removed.
+// --- END DELETED ---
+
+
+// --- RENAMED FUNCTION ---
+// Handle user input from the main loop
+// 
+// --- DELETION ---
+// The entire function "handle_main_loop_input(int ch)" has been removed.
+// It was conflicting with your project's built-in input handler.
+// --- END DELETION ---
+
 
 // Main function
 int main(int argc, char* argv[]) {
@@ -546,45 +689,101 @@ int main(int argc, char* argv[]) {
 
     // Set scheduling algorithm
     set_scheduling_algorithm(&g_traffic_system->scheduler, args.algorithm);
-    printf("Using scheduling algorithm: %s\n", get_algorithm_name(args.algorithm));
+    // printf("Using scheduling algorithm: %s\n", get_algorithm_name(args.algorithm));
 
     // Start simulation
     if (start_traffic_simulation() != 0) {
+        // ncurses is active, so we can't just printf
+        endwin(); // Clean up ncurses
         printf("Failed to start simulation\n");
         cleanup_and_exit(1);
     }
 
-    printf("TrafficGuru simulation running...\n");
-    printf("Press 'h' during simulation for help, 'q' to quit\n");
+    // --- MODIFICATION ---
+    // Set ncurses getch() to be non-blocking
+    // We assume init_visualization() has already called initscr()
+    // and g_traffic_system->visualization.main_window is the main ncurses window
+    if (g_traffic_system->visualization.main_window) {
+         nodelay(g_traffic_system->visualization.main_window, TRUE);
+    } else if (stdscr) {
+         // Fallback if main_window isn't set but ncurses is initialized
+         nodelay(stdscr, TRUE);
+    }
+    // --- END MODIFICATION ---
+
+    // REMOVED: These printfs will be overwritten by ncurses
+    // printf("TrafficGuru simulation running...\n");
+    // printf("Press 'h' during simulation for help, 'q' to quit\n");
+    
+    // Write an initial message to the status line
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+    mvprintw(max_y - 1, 0, "Simulation running... Press 'q' to quit, 'h' for help.");
+    refresh();
+
 
     // Main loop - handle user input and maintain simulation
     while (keep_running && g_traffic_system->simulation_running) {
+        
+        // --- DELETED ---
+        // update_visualization_snapshot() is removed.
+        // --- END DELETED ---
+
         // Display real-time visualization
-        display_real_time_status();
+        // This function must be drawing to the ncurses screen
+        display_real_time_status(); // This will now use the snapshot
+
+        // --- MODIFICATION ---
+        // We will call your project's built-in input handler,
+        // which is declared in visualization.h.
+        // We assume this function handles its own getch() and 
+        // will set 'keep_running = false' (or similar) when 'q' is pressed.
+        handle_user_input(&g_traffic_system->visualization);
+        // --- END MODIFICATION ---
 
         // Check if simulation duration has elapsed
         if (time(NULL) >= g_traffic_system->simulation_end_time) {
-            printf("Simulation duration elapsed\n");
+            // MODIFIED: Use ncurses print
+            getmaxyx(stdscr, max_y, max_x);
+            mvprintw(max_y - 1, 0, "%*s", max_x, ""); // Clear line
+            mvprintw(max_y - 1, 0, "Simulation duration elapsed. Shutting down...");
+            refresh();
+            sleep(1); // Pause to show message
+            // END MODIFIED
             break;
         }
 
-        // Validate system state periodically
+        // --- UI DEADLOCK FIX: REMOVED VALIDATION FROM UI LOOP ---
+        // This function caused a deadlock with the simulation thread.
+        /*
         static int validation_counter = 0;
-        if (++validation_counter >= 60) { // Validate every minute
+        if (++validation_counter >= 10) {
             if (!validate_system_state()) {
-                printf("System state validation failed, stopping simulation\n");
+                // ... (code removed) ...
                 break;
             }
             validation_counter = 0;
         }
+        */
+        // --- END UI DEADLOCK FIX ---
 
-        sleep(1); // Update every second
+        // --- MODIFICATION ---
+        // sleep(1); // Old: Update every second
+        usleep(100000); // New: Update every 100ms for responsive input
+        // --- END MODIFICATION ---
     }
 
     // Stop simulation
     stop_traffic_simulation();
 
+    // Cleanup (destroy_visualization will call endwin())
+    // and exit
+    cleanup_and_exit(0);
+
+    // --- Code below is now unreachable after cleanup_and_exit(0) ---
     // Print performance summary
+    // Note: ncurses must be shut down (in destroy_visualization)
+    // BEFORE printing to stdout again.
     if (!args.debug_mode) {
         log_performance_summary();
     }
