@@ -37,9 +37,8 @@
 #define LANE_WEST 3
 
 // Traffic simulation parameters
-#define VEHICLE_ARRIVAL_RATE_MIN 1   // seconds (restored - keep fast)
-#define VEHICLE_ARRIVAL_RATE_MAX 3   // seconds (restored - keep fast)
-#define SIMULATION_DURATION 300      // seconds (5 minutes default)
+#define VEHICLE_ARRIVAL_RATE_MIN 3  // seconds (slowed down for better visibility)
+#define VEHICLE_ARRIVAL_RATE_MAX 8  // seconds (slowed down for better visibility)
 
 // --- DELETED ---
 // The VisualizationSnapshot struct is removed to prevent deadlocks.
