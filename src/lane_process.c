@@ -77,20 +77,29 @@ void* lane_process_thread(void* arg) {
             lane->state = WAITING;
         }
 
-        // If lane is running, process vehicles
+                // If lane is running, process multiple vehicles in batch
         if (lane->state == RUNNING) {
-            int vehicle_id = remove_vehicle_from_lane(lane);
-            if (vehicle_id != -1) {
-                lane->total_vehicles_served++;
+            // Process up to BATCH_EXIT_SIZE vehicles simultaneously
+            int batch_count = 0;
+            int max_batch = (lane->queue_length < BATCH_EXIT_SIZE) ? lane->queue_length : BATCH_EXIT_SIZE;
+            
+            for (int i = 0; i < max_batch; i++) {
+                int vehicle_id = remove_vehicle_from_lane(lane);
+                if (vehicle_id != -1) {
+                    lane->total_vehicles_served++;
+                    batch_count++;
+                }
+            }
+            
+            if (batch_count > 0) {
                 lane->last_service_time = time(NULL);
-
-                // Simulate vehicle crossing time
+                
+                // Simulate vehicle crossing time for the batch
                 pthread_mutex_unlock(&lane->queue_lock);
-                usleep(VEHICLE_CROSS_TIME * 1000000 / 10); // Simulate crossing
+                usleep(VEHICLE_CROSS_TIME * 1000000 / 10); // Simulate batch crossing
                 pthread_mutex_lock(&lane->queue_lock);
             }
         }
-
         // Update waiting time
         if (lane->state == READY || lane->state == WAITING) {
             lane->waiting_time++;
