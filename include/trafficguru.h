@@ -30,6 +30,7 @@
 #define BATCH_EXIT_SIZE 3  // number of vehicles that can exit simultaneously
 #define EMERGENCY_PROBABILITY 100 // 1 in 100 chance per check
 #define SIMULATION_UPDATE_INTERVAL 300000 // microseconds (300ms for faster display updates)
+#define SIMULATION_DURATION 60        // seconds - default simulation duration
 
 // Lane definitions
 #define LANE_NORTH 0
