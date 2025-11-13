@@ -20,6 +20,9 @@ static const char* algorithm_names[] = {
     "Priority Round Robin"
 };
 
+// Forward declarations
+bool validate_single_lane_running(LaneProcess lanes[4]);
+
 // Initialize scheduler
 void init_scheduler(Scheduler* scheduler, SchedulingAlgorithm algorithm) {
     if (!scheduler) {
@@ -571,14 +574,12 @@ bool validate_single_lane_running(LaneProcess lanes[4]) {
     }
     
     int running_count = 0;
-    int running_lane_id = -1;
+
     
     for (int i = 0; i < 4; i++) {
         // Try to lock each lane to safely check state
-        if (pthread_mutex_trylock(&lanes[i].queue_lock) == 0) {
             if (lanes[i].state == RUNNING) {
                 running_count++;
-                running_lane_id = i;
             }
             pthread_mutex_unlock(&lanes[i].queue_lock);
         }
