@@ -366,11 +366,15 @@ static void draw_lanes_window(LaneProcess lanes[4]) {
 
 
     // --- Draw ASCII Intersection (Left Side) ---
+        mvwprintw(lanes_win, 2, 16, "N");  // North direction label
     mvwprintw(lanes_win, 3, 13, "%s", queue_str[LANE_NORTH]);
     mvwprintw(lanes_win, 4, 14, "|"); // Adjusted for alignment
     mvwprintw(lanes_win, 5, 5, "%s ---+--- %s", queue_str[LANE_WEST], queue_str[LANE_EAST]);
+        mvwprintw(lanes_win, 5, 3, "W");  // West direction label
+        mvwprintw(lanes_win, 5, 28, "E");  // East direction label
     mvwprintw(lanes_win, 6, 14, "|"); // Adjusted for alignment
     mvwprintw(lanes_win, 7, 13, "%s", queue_str[LANE_SOUTH]);
+        mvwprintw(lanes_win, 8, 16, "S");  // South direction label
 
     // --- Draw Status Block (Right Side) ---
     int status_x_pos = 35;
@@ -458,7 +462,6 @@ static void draw_metrics_window(PerformanceMetrics* metrics, SchedulingAlgorithm
     mvwprintw(metrics_win, 4, 2, "Utilization: %.1f%%", last_metrics.utilization * 100);
 
     mvwprintw(metrics_win, 2, 30, "Total Served   : %d", last_metrics.total_vehicles_processed);
-    mvwprintw(metrics_win, 3, 30, "Fairness Index : %.3f", last_metrics.fairness_index);
     mvwprintw(metrics_win, 4, 30, "Context Switches: %d", last_metrics.context_switches);
 
     mvwprintw(metrics_win, 6, 2, "Emerg. Resp: %.1fs", last_metrics.emergency_response_time);
