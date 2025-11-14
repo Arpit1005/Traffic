@@ -1,3 +1,12 @@
+/*
+ * Lane Process Implementation - Traffic Lane Dynamics
+ *
+ * Implementation of lane processes for managing individual traffic approaches.
+ * Handles vehicle queueing, state transitions, and intersection resource allocation.
+ *
+ * Compilation: Include lane_process.h, synchronization.h, trafficguru.h
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/lane_process.h"
 #include "../include/synchronization.h"
@@ -9,10 +18,8 @@
 #include <string.h>
 #include <assert.h>
 
-// Global lane names for display
 static const char* lane_names[] = {"North", "South", "East", "West"};
 
-// Initialize lane process
 void init_lane_process(LaneProcess* lane, int lane_id, int max_capacity) {
     if (!lane || lane_id < 0 || lane_id >= 4 || max_capacity <= 0) {
         return;
@@ -23,7 +30,7 @@ void init_lane_process(LaneProcess* lane, int lane_id, int max_capacity) {
     lane->queue_length = 0;
     lane->max_queue_length = max_capacity;
     lane->state = WAITING;
-    lane->priority = 2; // Normal priority
+    lane->priority = 2;
     lane->waiting_time = 0;
     lane->thread_id = 0;
     lane->last_arrival_time = time(NULL);
@@ -33,12 +40,10 @@ void init_lane_process(LaneProcess* lane, int lane_id, int max_capacity) {
     lane->requested_quadrants = 0;
     lane->allocated_quadrants = 0;
 
-    // Initialize synchronization primitives
     pthread_mutex_init(&lane->queue_lock, NULL);
     pthread_cond_init(&lane->queue_cond, NULL);
 }
 
-// Destroy lane process and cleanup resources
 void destroy_lane_process(LaneProcess* lane) {
     if (!lane) {
         return;

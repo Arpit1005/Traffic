@@ -1,3 +1,14 @@
+/*
+ * Traffic Mutex Implementation - Hybrid Deadlock Prevention
+ *
+ * Implements enhanced intersection access control combining:
+ * - POSIX mutexes for basic synchronization
+ * - Banker's algorithm for resource safety
+ * - Hybrid strategy for optimal deadlock prevention
+ *
+ * Compilation: Include traffic_mutex.h, synchronization.h, bankers_algorithm.h
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/synchronization.h"
 #include "../include/bankers_algorithm.h"
@@ -7,15 +18,13 @@
 #include <time.h>
 #include <unistd.h>
 
-// Enhanced traffic mutex that combines intersection control with Banker's algorithm
 typedef struct {
     IntersectionMutex* intersection;
     BankersState* bankers;
     bool enhanced_mode;
-    int allocation_strategy; // 0=FIFO, 1=Banker's, 2=Hybrid
+    int allocation_strategy;
 } EnhancedTrafficMutex;
 
-// Global enhanced traffic mutex
 static EnhancedTrafficMutex g_traffic_mutex = {0};
 static bool traffic_mutex_initialized = false;
 

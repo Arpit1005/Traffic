@@ -1,3 +1,21 @@
+/*
+ * Shortest Job First Scheduler - Optimal Minimal Waiting Time Algorithm
+ *
+ * Implements Shortest Job First (SJF) and Shortest Remaining Time First (SRTF)
+ * scheduling algorithms for traffic signal control.
+ *
+ * Algorithm:
+ * - Selects lane with minimum estimated crossing time
+ * - Estimated time = queue_length × VEHICLE_CROSS_TIME
+ * - Tie-breaker: FIFO order (earliest arrival)
+ * - SRTF variant: Preemptive version considering remaining work
+ *
+ * Thread Safety: Safe lane data reads via mutex locking per lane
+ * Advantages: Minimizes average wait time
+ *
+ * Compilation: Include scheduler.h, lane_process.h, trafficguru.h
+ */
+
 #include "../include/scheduler.h"
 #include "../include/lane_process.h"
 #include "../include/trafficguru.h"
@@ -5,8 +23,6 @@
 #include <limits.h>
 #include <float.h>
 
-// Shortest Job First scheduling algorithm
-// --- THIS FUNCTION HAS BEEN REWRITTEN TO BE THREAD-SAFE ---
 int schedule_next_lane_sjf(Scheduler* scheduler, LaneProcess lanes[4]) {
     if (!scheduler || !lanes) {
         return -1;
@@ -16,43 +32,27 @@ int schedule_next_lane_sjf(Scheduler* scheduler, LaneProcess lanes[4]) {
     int min_estimated_time = INT_MAX;
     time_t earliest_arrival = time(NULL);
 
-    // --- FIX: Read all lane data in a thread-safe way ---
-    // We will store the data we need in local variables.
     LaneState state[4];
     int queue_length[4];
     time_t arrival_time[4];
 
     for (int i = 0; i < 4; i++) {
-        // 1. Lock the lane
         pthread_mutex_lock(&lanes[i].queue_lock);
-        
-        // 2. Read all data
         state[i] = lanes[i].state;
         queue_length[i] = lanes[i].queue_length;
         arrival_time[i] = lanes[i].last_arrival_time;
-        
-        // 3. Unlock the lane
         pthread_mutex_unlock(&lanes[i].queue_lock);
     }
-    // --- END FIX ---
 
-
-    // Find lane with shortest estimated processing time
-    // Now we operate *only* on our safe local copies.
     for (int i = 0; i < 4; i++) {
-        // We use the local 'state[i]' variable
-        if (state[i] == READY) { 
-            // We use the local 'queue_length[i]' variable
+        if (state[i] == READY) {
             int estimated_time = queue_length[i] * VEHICLE_CROSS_TIME;
 
-            // Select lane with minimum estimated time
             if (estimated_time < min_estimated_time) {
                 min_estimated_time = estimated_time;
                 best_lane = i;
-                // We use the local 'arrival_time[i]' variable
                 earliest_arrival = arrival_time[i];
             } else if (estimated_time == min_estimated_time) {
-                // Tie breaker: use FIFO order (earliest arrival)
                 if (arrival_time[i] < earliest_arrival) {
                     best_lane = i;
                     earliest_arrival = arrival_time[i];
@@ -64,8 +64,6 @@ int schedule_next_lane_sjf(Scheduler* scheduler, LaneProcess lanes[4]) {
     return best_lane;
 }
 
-// SJF variant: Preemptive Shortest Remaining Time First
-// --- FIX: This function must also be thread-safe ---
 int schedule_next_lane_srtf(Scheduler* scheduler, LaneProcess lanes[4]) {
     if (!scheduler || !lanes) {
         return -1;
@@ -74,7 +72,6 @@ int schedule_next_lane_srtf(Scheduler* scheduler, LaneProcess lanes[4]) {
     int best_lane = -1;
     int min_remaining_time = INT_MAX;
 
-    // --- FIX: Read data safely ---
     LaneState state[4];
     int queue_length[4];
     for (int i = 0; i < 4; i++) {
@@ -83,9 +80,7 @@ int schedule_next_lane_srtf(Scheduler* scheduler, LaneProcess lanes[4]) {
         queue_length[i] = lanes[i].queue_length;
         pthread_mutex_unlock(&lanes[i].queue_lock);
     }
-    // --- END FIX ---
 
-    // Find lane with shortest remaining time
     for (int i = 0; i < 4; i++) {
         if (state[i] == READY) {
             int remaining_time = queue_length[i] * VEHICLE_CROSS_TIME;

@@ -1,6 +1,16 @@
 /*
- * This is the header file for bankers_algorithm.c
- * You must create this file in your include/ directory.
+ * Banker's Algorithm - Deadlock Prevention System
+ *
+ * Implements the Banker's algorithm for safe resource allocation in traffic intersection.
+ * Prevents deadlocks by checking resource allocation safety before granting access.
+ *
+ * Resource Model: Intersection quadrants (4 quadrants for 4-way intersection)
+ * Lanes: 4 traffic approaches (North, South, East, West)
+ *
+ * Safety Conditions:
+ * - Request <= Need (lane hasn't exceeded max claims)
+ * - Request <= Available (sufficient free resources)
+ * - Allocation results in safe state (all lanes can complete)
  */
 
 #ifndef BANKERS_ALGORITHM_H
@@ -8,10 +18,9 @@
 
 #include <pthread.h>
 #include <stdbool.h>
-#include "lane_process.h" // Assumed to exist
+#include "lane_process.h"
 
 #define NUM_QUADRANTS 4
-// These should match your definitions, e.g., in trafficguru.h
 #ifndef NUM_LANES
 #define NUM_LANES 4
 #endif
@@ -20,14 +29,11 @@
 #define LANE_EAST 2
 #define LANE_WEST 3
 
-// Define quadrant constants
 #define QUADRANT_NE 0
 #define QUADRANT_NW 1
 #define QUADRANT_SW 2
 #define QUADRANT_SE 3
 
-
-// Banker's algorithm state
 typedef struct {
     int available[NUM_QUADRANTS];
     int maximum[NUM_LANES][NUM_QUADRANTS];
@@ -38,7 +44,6 @@ typedef struct {
     int deadlock_preventions;
 } BankersState;
 
-// Function Prototypes
 void init_bankers_state(BankersState* state);
 void destroy_bankers_state(BankersState* state);
 BankersState* get_global_bankers_state();
@@ -68,4 +73,4 @@ float get_resource_utilization(BankersState* state);
 void increment_deadlock_preventions(BankersState* state);
 void reset_bankers_state();
 
-#endif // BANKERS_ALGORITHM_H
+#endif

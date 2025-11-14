@@ -1,10 +1,18 @@
+/*
+ * Queue Implementation - FIFO Vehicle Queue Management
+ *
+ * Circular queue implementation for managing vehicle arrivals at traffic lanes.
+ * Provides efficient FIFO operations with dynamic resizing and statistics.
+ *
+ * Compilation: Include queue.h
+ */
+
 #include "../include/queue.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <assert.h>
 
-// Create a new queue with specified capacity
 Queue* create_queue(int capacity) {
     if (capacity <= 0) {
         return NULL;
@@ -32,7 +40,6 @@ Queue* create_queue(int capacity) {
     return queue;
 }
 
-// Destroy queue and free memory
 void destroy_queue(Queue* queue) {
     if (queue) {
         free(queue->vehicles);
@@ -40,7 +47,6 @@ void destroy_queue(Queue* queue) {
     }
 }
 
-// Resize queue to new capacity
 void resize_queue(Queue* queue, int new_capacity) {
     if (!queue || new_capacity <= 0 || new_capacity < queue->size) {
         return;
@@ -51,7 +57,6 @@ void resize_queue(Queue* queue, int new_capacity) {
         return;
     }
 
-    // Copy existing elements to new array
     for (int i = 0; i < queue->size; i++) {
         int index = (queue->front + i) % queue->capacity;
         new_vehicles[i] = queue->vehicles[index];
@@ -64,7 +69,6 @@ void resize_queue(Queue* queue, int new_capacity) {
     queue->rear = queue->size - 1;
 }
 
-// Add vehicle to queue rear
 bool enqueue(Queue* queue, int vehicle_id) {
     if (!queue) {
         return false;
@@ -83,10 +87,9 @@ bool enqueue(Queue* queue, int vehicle_id) {
     return true;
 }
 
-// Remove vehicle from queue front
 int dequeue(Queue* queue) {
     if (!queue || is_empty(queue)) {
-        return -1; // Error value
+        return -1;
     }
 
     int vehicle_id = queue->vehicles[queue->front];
@@ -94,7 +97,6 @@ int dequeue(Queue* queue) {
     queue->size--;
     queue->dequeue_count++;
 
-    // Reset front and rear when queue becomes empty
     if (queue->size == 0) {
         queue->front = 0;
         queue->rear = -1;
@@ -103,7 +105,6 @@ int dequeue(Queue* queue) {
     return vehicle_id;
 }
 
-// Peek at front vehicle without removing
 int peek(Queue* queue) {
     if (!queue || is_empty(queue)) {
         return -1;
@@ -112,27 +113,22 @@ int peek(Queue* queue) {
     return queue->vehicles[queue->front];
 }
 
-// Check if queue is empty
 bool is_empty(Queue* queue) {
     return queue ? queue->size == 0 : true;
 }
 
-// Check if queue is full
 bool is_full(Queue* queue) {
     return queue ? queue->size == queue->capacity : true;
 }
 
-// Get current queue size
 int get_size(Queue* queue) {
     return queue ? queue->size : 0;
 }
 
-// Get queue capacity
 int get_capacity(Queue* queue) {
     return queue ? queue->capacity : 0;
 }
 
-// Clear all vehicles from queue
 void clear_queue(Queue* queue) {
     if (queue) {
         queue->front = 0;
@@ -141,7 +137,6 @@ void clear_queue(Queue* queue) {
     }
 }
 
-// Print queue contents for debugging
 void print_queue(Queue* queue) {
     if (!queue) {
         printf("Queue: NULL\n");

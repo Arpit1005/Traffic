@@ -1,85 +1,78 @@
+/*
+ * TrafficGuru Main Program - Intelligent Traffic Intersection Simulator
+ *
+ * Main entry point for the traffic simulation system. Initializes the TrafficGuru
+ * system, manages simulation lifecycle, and handles user interaction.
+ *
+ * Features:
+ * - Multi-threaded simulation with lane processing
+ * - Real-time ncurses-based UI
+ * - Multiple scheduling algorithms (SJF, Multilevel Feedback, Priority RR)
+ * - Deadlock prevention using Banker's algorithm
+ * - Emergency vehicle preemption
+ * - Performance metrics collection
+ *
+ * Compilation: gcc -o trafficguru *.c -lncurses -lpthread
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/trafficguru.h"
 #include <getopt.h>
 #include <signal.h>
-#include <ncurses.h> // <--- ADDED for getch()
+#include <ncurses.h>
 
-// Global system instance
 TrafficGuruSystem* g_traffic_system = NULL;
 
-// Signal handling
-volatile bool keep_running = true; // <-- REMOVED 'static'
+volatile bool keep_running = true;
 static volatile bool pause_requested = false;
 
-// --- NEW FUNCTION: Vehicle Generator Thread ---
-// This loop runs in its own thread and generates vehicles
-// to fix the "all values are 0" bug.
 void* vehicle_generator_loop(void* arg) {
     (void)arg;
 
     while (g_traffic_system && g_traffic_system->simulation_running && keep_running) {
         if (!g_traffic_system->simulation_paused) {
-            // Calculate random sleep time in microseconds
-            // --- FIX: Use seconds, not milliseconds ---
             int min_sec = g_traffic_system->min_arrival_rate;
             int max_sec = g_traffic_system->max_arrival_rate;
-            // Ensure min <= max
             if (min_sec > max_sec) min_sec = max_sec;
             
-            // Calculate sleep time in seconds (can be 0)
             int sleep_time_sec = (rand() % (max_sec - min_sec + 1)) + min_sec;
-            
-            // Convert to microseconds, but also add some sub-second randomness
-            // (e.g., 1-5 seconds becomes 1000ms-5000ms)
             long sleep_time_us = (sleep_time_sec * 1000000) + (rand() % 1000 * 1000);
             
-            // Pick a random lane
             int lane_idx = rand() % NUM_LANES;
             LaneProcess* lane = &g_traffic_system->lanes[lane_idx];
 
-            // --- DEADLOCK FIX: Lock global state ONLY for the counter ---
             int new_vehicle_id = 0;
             pthread_mutex_lock(&g_traffic_system->global_state_lock);
             new_vehicle_id = g_traffic_system->total_vehicles_generated++;
             pthread_mutex_unlock(&g_traffic_system->global_state_lock);
-            // --- END DEADLOCK FIX ---
             
-            // We assume add_vehicle_to_lane is thread-safe (uses lane->queue_lock)
             add_vehicle_to_lane(lane, new_vehicle_id);
 
-                    // ---- EMERGENCY VEHICLE GENERATION ----
-                    // Periodically generate emergency vehicles (1 in 100 chance)
-                    if ((rand() % EMERGENCY_PROBABILITY) == 0) {
-                    EmergencyVehicle* emergency = generate_random_emergency();
-                    if (emergency) {
-                        emergency->lane_id = lane_idx;
-                        add_emergency_vehicle(&(g_traffic_system->emergency_system), emergency);
-                    }                                }
+            if ((rand() % EMERGENCY_PROBABILITY) == 0) {
+                EmergencyVehicle* emergency = generate_random_emergency();
+                if (emergency) {
+                    emergency->lane_id = lane_idx;
+                    add_emergency_vehicle(&(g_traffic_system->emergency_system), emergency);
+                }
+            }
             
-            // --- "Wake up" the lane (this is also a lock) ---
             pthread_mutex_lock(&lane->queue_lock);
             if (lane->state == WAITING) {
                 lane->state = READY;
-                lane->waiting_time = 0; // Reset wait time
+                lane->waiting_time = 0;
             }
             pthread_mutex_unlock(&lane->queue_lock);
-            // --- END FIX ---
             
-            // Sleep for the calculated time (in microseconds)
             usleep(sleep_time_us);
         } else {
-            // Sleep for a bit if paused
-            usleep(500000); // 500ms
+            usleep(500000);
         }
     }
     return NULL;
 }
-// --- END NEW FUNCTION ---
-
 
 void handle_signal_interrupt(int sig) {
-    (void)sig; // Suppress unused parameter warning
-    // This can be called from a signal, avoid printf
+    (void)sig;
     keep_running = false;
     if (g_traffic_system) {
         g_traffic_system->simulation_running = false;
@@ -88,14 +81,10 @@ void handle_signal_interrupt(int sig) {
 
 void handle_signal_terminate(int sig) {
     (void)sig;
-    // This can be called from a signal, avoid printf
     keep_running = false;
     if (g_traffic_system) {
         g_traffic_system->simulation_running = false;
     }
-    // A more forceful exit might be needed if ncurses is running
-    // endwin();
-    // exit(0);
 }
 
 void setup_signal_handlers() {

@@ -1,3 +1,12 @@
+/*
+ * Performance Metrics Implementation - Statistics Collection and Analysis
+ *
+ * Collects, calculates, and validates performance metrics for traffic simulation.
+ * Computes throughput, wait times, utilization, fairness, and emergency response times.
+ *
+ * Compilation: Include performance_metrics.h
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/performance_metrics.h"
 #include <stdio.h>
@@ -6,7 +15,6 @@
 #include <time.h>
 #include <math.h>
 
-// Initialize performance metrics
 void init_performance_metrics(PerformanceMetrics* metrics) {
     if (!metrics) return;
 

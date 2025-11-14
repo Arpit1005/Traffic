@@ -1,19 +1,29 @@
+/*
+ * Banker's Algorithm Implementation - Deadlock Prevention
+ *
+ * Implements the Banker's algorithm for safe resource allocation.
+ * Prevents deadlocks in intersection quadrant allocation by checking system safety.
+ *
+ * Algorithm: Safety test before each allocation decision
+ * - Check if lane request is valid
+ * - Pretend to allocate resources
+ * - Run safety algorithm to check if all lanes can finish
+ * - Rollback if unsafe, confirm if safe
+ *
+ * Compilation: Include bankers_algorithm.h, lane_process.h
+ */
+
 #include "../include/bankers_algorithm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-// Global Banker's state instance
 static BankersState g_bankers_state = {0};
 static bool bankers_initialized = false;
 
-// --- DEADLOCK FIX ---
-// Create internal, non-locking versions of the safety algorithms.
-// These are to be called ONLY by functions that already hold the lock.
 static bool is_safe_state_unlocked(BankersState* state);
 static bool safety_algorithm_unlocked(BankersState* state, bool finish[NUM_LANES]);
-// --- END DEADLOCK FIX ---
 
 
 // Initialize Banker's algorithm state

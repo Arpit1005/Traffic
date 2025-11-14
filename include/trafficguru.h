@@ -1,3 +1,24 @@
+/*
+ * TrafficGuru - Intelligent Traffic Intersection Management System
+ * 
+ * Main system header file defining the core traffic simulation framework.
+ * Integrates lane processing, scheduling algorithms, synchronization primitives,
+ * deadlock prevention (Banker's algorithm), emergency vehicle handling, and
+ * performance metrics collection.
+ *
+ * Key Components:
+ * - Lane processes: North, South, East, West traffic lanes
+ * - Scheduler: Multiple scheduling algorithms (SJF, Multilevel Feedback, Priority RR)
+ * - Synchronization: Intersection mutex and condition variables
+ * - Banker's Algorithm: Deadlock prevention for resource allocation
+ * - Emergency System: Preemptive handling of emergency vehicles
+ * - Performance Metrics: Real-time traffic statistics and analysis
+ * - Visualization: Terminal UI with ncurses display
+ *
+ * Author: TrafficGuru Development Team
+ * Version: 1.0
+ */
+
 #ifndef TRAFFICGURU_H
 #define TRAFFICGURU_H
 
@@ -10,7 +31,6 @@
 #include <signal.h>
 #include <stdbool.h>
 
-// Include all system headers
 #include "lane_process.h"
 #include "queue.h"
 #include "scheduler.h"
@@ -21,83 +41,59 @@
 #include "visualization.h"
 #include "traffic_mutex.h"
 
-// System constants
 #define NUM_LANES 4
 #define MAX_QUEUE_CAPACITY 20
 #define DEFAULT_TIME_QUANTUM 3
-#define CONTEXT_SWITCH_TIME 500  // milliseconds
-#define VEHICLE_CROSS_TIME 3     // seconds (increased from 2 - each vehicle takes longer)
-#define BATCH_EXIT_SIZE 3  // number of vehicles that can exit simultaneously
-#define EMERGENCY_PROBABILITY 100 // 1 in 100 chance per check
-#define SIMULATION_UPDATE_INTERVAL 300000 // microseconds (300ms for faster display updates)
-#define SIMULATION_DURATION 200        // seconds - default simulation duration
+#define CONTEXT_SWITCH_TIME 500
+#define VEHICLE_CROSS_TIME 3
+#define BATCH_EXIT_SIZE 3
+#define EMERGENCY_PROBABILITY 100
+#define SIMULATION_UPDATE_INTERVAL 300000
+#define SIMULATION_DURATION 200
 
-// Lane definitions
 #define LANE_NORTH 0
 #define LANE_SOUTH 1
 #define LANE_EAST 2
 #define LANE_WEST 3
 
-// Traffic simulation parameters
-#define VEHICLE_ARRIVAL_RATE_MIN 1  // seconds (slowed down for better visibility)
-#define VEHICLE_ARRIVAL_RATE_MAX 3  // seconds (slowed down for better visibility)
-
-// --- DELETED ---
-// The VisualizationSnapshot struct is removed to prevent deadlocks.
-// The UI will use pthread_mutex_trylock() instead.
-// --- END DELETED ---
+#define VEHICLE_ARRIVAL_RATE_MIN 1
+#define VEHICLE_ARRIVAL_RATE_MAX 3
 
 
-// Global system state
 typedef struct {
-    LaneProcess lanes[NUM_LANES];           // All traffic lanes
-    Scheduler scheduler;                    // Central scheduler
-    IntersectionMutex intersection;         // Intersection synchronization
-    BankersState bankers_state;             // Deadlock prevention
-    PerformanceMetrics metrics;             // Performance tracking
-    EmergencySystem emergency_system;       // Emergency vehicle handling
-    Visualization visualization;            // Terminal interface
-    SignalHistory signal_history;           // Signal change history
-    bool simulation_running;                // Main simulation flag
-    bool simulation_paused;                 // Pause/resume state
-    time_t simulation_start_time;           // When simulation started
-    time_t simulation_end_time;             // When simulation ends
-    int total_vehicles_generated;           // Total vehicles in simulation
-    pthread_t simulation_thread;            // Main simulation thread
-    pthread_mutex_t global_state_lock;      // Global state protection
-    
-    // --- NEW FIELDS TO FIX "VALUES ARE 0" BUG ---
-    int min_arrival_rate;                   // Min vehicle arrival rate (sec)
-    int max_arrival_rate;                   // Max vehicle arrival rate (sec)
-    pthread_t vehicle_generator_thread;     // Thread for generating vehicles
-    // --- END NEW FIELDS ---
-    
-    // --- DELETED ---
-    // Removed snapshot fields
-    // --- END DELETED ---
-
+    LaneProcess lanes[NUM_LANES];
+    Scheduler scheduler;
+    IntersectionMutex intersection;
+    BankersState bankers_state;
+    PerformanceMetrics metrics;
+    EmergencySystem emergency_system;
+    Visualization visualization;
+    SignalHistory signal_history;
+    bool simulation_running;
+    bool simulation_paused;
+    time_t simulation_start_time;
+    time_t simulation_end_time;
+    int total_vehicles_generated;
+    pthread_t simulation_thread;
+    pthread_mutex_t global_state_lock;
+    int min_arrival_rate;
+    int max_arrival_rate;
+    pthread_t vehicle_generator_thread;
 } TrafficGuruSystem;
 
-// Global system instance
 extern TrafficGuruSystem* g_traffic_system;
-
-// --- MODIFICATION ---
-// Global flag to stop the main loop from any file
-// 'extern' tells other files this variable exists
-// 'volatile' ensures it's safe to use across threads/signals
 extern volatile bool keep_running;
-// --- END MODIFICATION ---
 
-// System lifecycle functions
-int init_traffic_guru_system();
+void init_traffic_guru_system();
 void destroy_traffic_guru_system();
 int start_traffic_simulation();
 void stop_traffic_simulation();
 void pause_traffic_simulation();
 void resume_traffic_simulation();
 
-// Main simulation loop
 void* simulation_main_loop(void* arg);
+
+#endif
 void update_simulation_state();
 void process_traffic_events();
 
