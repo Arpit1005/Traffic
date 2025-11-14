@@ -1,3 +1,19 @@
+/*
+ * Multilevel Feedback Queue Scheduler - Dynamic Priority Scheduling
+ *
+ * Implements multilevel feedback queue scheduling algorithm for traffic signals.
+ * Lanes move between priority queues based on wait time, consecutive runs, and aging.
+ *
+ * Key Features:
+ * - Dynamic priority adjustment (high, medium, low)
+ * - Promotion based on wait time (aging prevention)
+ * - Demotion after excessive consecutive runs
+ * - Starvation prevention with aging threshold
+ * - Variable time quanta per priority level (2-6 seconds)
+ *
+ * Thread Safety: Uses pthread_mutex for priority tracking updates
+ */
+
 #include "../include/scheduler.h"
 #include "../include/lane_process.h"
 #include "../include/trafficguru.h"
@@ -6,7 +22,6 @@
 #include <time.h>
 #include <pthread.h>
 
-// Priority levels for multilevel feedback queue
 typedef enum {
     PRIORITY_HIGH = 0,
     PRIORITY_MEDIUM = 1,
@@ -14,7 +29,6 @@ typedef enum {
     NUM_PRIORITY_LEVELS = 3
 } PriorityLevel;
 
-// Lane priority tracking
 typedef struct {
     int lane_id;
     PriorityLevel current_priority;
@@ -24,17 +38,14 @@ typedef struct {
     int time_in_current_level;
 } LanePriorityInfo;
 
-// Global priority tracking for lanes
 static LanePriorityInfo lane_priorities[4];
 static bool priorities_initialized = false;
-static pthread_mutex_t priority_lock = PTHREAD_MUTEX_INITIALIZER;  // Thread safety for priority updates
+static pthread_mutex_t priority_lock = PTHREAD_MUTEX_INITIALIZER;
 
-// Priority thresholds
-#define PROMOTION_THRESHOLD 10    // Waiting time in seconds for promotion
-#define DEMOTION_THRESHOLD 5       // Consecutive runs for demotion (increased for better traffic flow
-#define AGING_THRESHOLD 15       // Maximum wait time before forced promotion
-// Time quantum per priority level
-static const int time_quanta[NUM_PRIORITY_LEVELS] = {2, 4, 6}; // seconds
+#define PROMOTION_THRESHOLD 10
+#define DEMOTION_THRESHOLD 5
+#define AGING_THRESHOLD 15
+static const int time_quanta[NUM_PRIORITY_LEVELS] = {2, 4, 6};
 
 // Initialize priority tracking
 void init_lane_priorities() {

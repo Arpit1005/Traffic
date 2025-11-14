@@ -1,3 +1,12 @@
+/*
+ * Synchronization Implementation - Intersection Lock Management
+ *
+ * Thread-safe intersection access control using POSIX mutexes and condition variables.
+ * Provides lane signaling, blocking/non-blocking lock acquisition, and deadlock detection.
+ *
+ * Compilation: Include synchronization.h, lane_process.h
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/synchronization.h"
 #include <stdio.h>
@@ -8,7 +17,6 @@
 #include <limits.h>
 #include <assert.h>
 
-// Global intersection mutex instance
 static IntersectionMutex g_intersection = {0};
 static bool intersection_initialized = false;
 

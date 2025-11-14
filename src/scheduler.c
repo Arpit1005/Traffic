@@ -1,26 +1,31 @@
+/*
+ * Scheduler Implementation - Scheduling Algorithm Execution
+ *
+ * Implements three traffic signal scheduling algorithms:
+ * 1. SJF - Shortest Job First
+ * 2. Multilevel Feedback Queue
+ * 3. Priority Round Robin
+ *
+ * Compilation: Include scheduler.h, lane_process.h, trafficguru.h
+ */
+
 #define _XOPEN_SOURCE 600
 #include "../include/scheduler.h"
 #include "../include/lane_process.h"
 #include "../include/trafficguru.h"
-// --- ADDED ---
-// We need these headers for the fix
-#include "../include/performance_metrics.h" 
-// --- END ADD ---
-
+#include "../include/performance_metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
 
-// Algorithm names for display
 static const char* algorithm_names[] = {
     "Shortest Job First",
     "Multilevel Feedback Queue",
     "Priority Round Robin"
 };
 
-// Forward declarations
 bool validate_single_lane_running(LaneProcess lanes[4]);
 
 // Initialize scheduler

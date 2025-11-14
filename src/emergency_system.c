@@ -1,3 +1,12 @@
+/*
+ * Emergency System Implementation - Emergency Vehicle Management
+ *
+ * Handles detection, preemption, and clearance of emergency vehicles at intersections.
+ * Supports multiple emergency types with priority-based signal override.
+ *
+ * Compilation: Include emergency_system.h, synchronization.h, traffic_mutex.h
+ */
+
 #include "../include/emergency_system.h"
 #include "../include/synchronization.h"
 #include "../include/traffic_mutex.h"
@@ -7,16 +16,14 @@
 #include <string.h>
 #include <unistd.h>
 
-// Global emergency system instance
 static EmergencySystem g_emergency_system = {0};
 static bool emergency_system_initialized = false;
 
-// Emergency vehicle configuration
-#define DEFAULT_APPROACH_TIME_MIN 5.0f   // seconds
-#define DEFAULT_APPROACH_TIME_MAX 15.0f  // seconds
-#define DEFAULT_CROSSING_DURATION_MIN 3.0f // seconds
-#define DEFAULT_CROSSING_DURATION_MAX 6.0f // seconds
-#define DEFAULT_EMERGENCY_PROBABILITY 200 // 1 in 200 chance per check
+#define DEFAULT_APPROACH_TIME_MIN 5.0f
+#define DEFAULT_APPROACH_TIME_MAX 15.0f
+#define DEFAULT_CROSSING_DURATION_MIN 3.0f
+#define DEFAULT_CROSSING_DURATION_MAX 6.0f
+#define DEFAULT_EMERGENCY_PROBABILITY 200
 
 // Get global emergency system instance
 EmergencySystem* get_global_emergency_system() {

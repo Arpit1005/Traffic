@@ -1,56 +1,48 @@
 /*
- * MODIFIED: This is a new implementation of visualization.c
- * It uses the ncurses library to draw the UI and handle input,
- * fixing the "infinite loop" and "screen clearing" issues.
+ * Visualization Implementation - Terminal UI with ncurses
  *
- * THIS VERSION fixes the deadlock (freeze) by using
- * pthread_mutex_trylock() instead of pthread_mutex_lock().
- * The UI thread will no longer block if a mutex is held
- * by a simulation thread.
+ * Implements ncurses-based traffic simulation visualization.
+ * Manages multi-window display, color support, and real-time metrics updates.
+ * Uses non-blocking input and trylock to prevent deadlocks.
  *
- * THIS VERSION ALSO fixes a potential input-blocking bug
- * by changing getch() to wgetch(viz->main_window).
+ * Compilation: Include visualization.h, trafficguru.h, ncurses library required
+ */
+
+/*
+ * IMPLEMENTATION NOTES:
+ * - Uses ncurses for terminal UI
+ * - Fixes deadlock by using pthread_mutex_trylock instead of pthread_mutex_lock
+ * - Maintains stale data cache to prevent UI freezing when locks are held
+ * - Uses non-blocking getch() via wgetch(main_window)
+ * - Signal history tracks lane state changes for analysis
  */
 
 #define _XOPEN_SOURCE 600
 #include "../include/visualization.h"
-#include "../include/trafficguru.h" // Includes main system, keep_running, etc.
-#include <ncurses.h> // <--- Use ncurses
+#include "../include/trafficguru.h"
+#include <ncurses.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-// --- FIX: Local static variables for state ---
 static bool show_help = false;
 static bool pause_requested = false;
-// --- END FIX ---
 
-// Global pointers to ncurses windows
 static WINDOW *main_win = NULL;
 static WINDOW *status_win = NULL;
 static WINDOW *metrics_win = NULL;
 static WINDOW *lanes_win = NULL;
 static WINDOW *help_win = NULL;
 
-// --- DEADLOCK FIX: Stale Data Cache ---
-// We will store the last known good values here.
-// The UI will draw these values.
-// A 'trylock' will attempt to update them each frame.
-// This prevents the UI thread from blocking (and deadlocking).
 static int last_queues[NUM_LANES] = {0, 0, 0, 0};
 static int last_waits[NUM_LANES] = {0, 0, 0, 0};
 static LaneState last_states[NUM_LANES] = {WAITING, WAITING, WAITING, WAITING};
-static PerformanceMetrics last_metrics = {0}; // Assumes {0} is a valid init
+static PerformanceMetrics last_metrics = {0};
 static bool last_emergency_mode = false;
-// --- END DEADLOCK FIX ---
 
-
-// Forward declarations for local functions
 static void draw_borders(void);
-// --- FIX: Renamed functions to avoid header conflict ---
 static void draw_lanes_window(LaneProcess lanes[4]);
 static void draw_metrics_window(PerformanceMetrics* metrics, SchedulingAlgorithm current_algo);
-// --- FIX: Added forward declaration ---
 static void show_help_screen(Visualization* viz);
 
 // Initialize visualization system

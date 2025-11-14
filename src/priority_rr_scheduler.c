@@ -1,3 +1,23 @@
+/*
+ * Priority Round Robin Scheduler - Time-Sliced Priority Scheduling
+ *
+ * Implements priority-based round robin scheduling algorithm for traffic signals.
+ * Lanes are scheduled in round-robin fashion within priority levels.
+ *
+ * Priority Levels:
+ * 1. Emergency vehicles (highest priority)
+ * 2. Normal traffic (queue length > 3)
+ * 3. Low traffic (queue length ≤ 3)
+ *
+ * Key Features:
+ * - Fixed time quantum (3 seconds) per lane
+ * - Dynamic priority adjustment based on queue depth
+ * - Round-robin fairness within priority levels
+ * - Emergency vehicle detection and prioritization
+ *
+ * Thread Safety: Uses local round robin tracking
+ */
+
 #include "../include/scheduler.h"
 #include "../include/lane_process.h"
 #include "../include/emergency_system.h"
@@ -6,14 +26,12 @@
 #include <stdlib.h>
 #include <time.h>
 
-// Priority levels for traffic scheduling
 typedef enum {
-    PRIORITY_EMERGENCY = 1,    // Emergency vehicles
-    PRIORITY_NORMAL = 2,       // Normal traffic lanes with > 3 vehicles
-    PRIORITY_LOW = 3           // Normal traffic lanes with ≤ 3 vehicles
+    PRIORITY_EMERGENCY = 1,
+    PRIORITY_NORMAL = 2,
+    PRIORITY_LOW = 3
 } TrafficPriority;
 
-// Lane tracking for Round Robin
 typedef struct {
     int lane_id;
     TrafficPriority priority;
@@ -22,13 +40,11 @@ typedef struct {
     bool in_ready_queue;
 } LaneRRInfo;
 
-// Global Round Robin tracking
 static LaneRRInfo lane_rr_info[4];
 static bool rr_initialized = false;
 static int current_round_robin_index = 0;
 
-// Round Robin time quantum
-#define RR_TIME_QUANTUM 3  // seconds for all priority levels
+#define RR_TIME_QUANTUM 3
 
 // Initialize Round Robin tracking
 void init_round_robin_tracking() {
